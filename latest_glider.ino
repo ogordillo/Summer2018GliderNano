@@ -9,32 +9,37 @@
 #include <Pixy.h>
 #include<Wire.h>
 #include "rgb_lcd.h"
+
 #include <Servo.h>
 
-#define ADC_REF 5
-#define ROTARY_ANGLE_SENSOR A0
+#define ADC_REF 5 //5v
+#define ROTARY_ANGLE_SENSOR A0 //Analog pin 0
 #define GROVE_VCC 5 //VCC of the grove interface is normally 5v
 #define FULL_ANGLE 300 //full value of the rotary angle is 300 degrees
 
-rgb_lcd lcd;
-const int colorR = 255;
-const int colorG = 0;
-const int colorB = 0;
+rgb_lcd lcd; //create lcd
+const int colorR = 255;    //red
+const int colorG = 0;      //green
+const int colorB = 0;      //blue
 
-int modecounter = 0; 
-// This is the main Pixy object 
-Pixy pixy;
+int modecounter = 0;       //different modes display different data on LCD
 
-int servoLeftPin = 9;
-Servo servoLeft;  
+
+Pixy pixy; // This is the main Pixy object 
+
+int servoLeftPin = 9;      //digital pin 9
+Servo servoLeft;          //create servo
 int servoLeftAngle = 0;   // servo position in degrees
-
-int servoRightPin = 10;
-Servo servoRight;  
-int servoRightAngle = 0;   
+int servoRightPin = 10;   //digital pin 10
+Servo servoRight;          //create servo
+int servoRightAngle = 0;    //servo position in degrees
 
 const int MPU_addr=0x68;  // I2C address of the MPU-6050
-int16_t AcX,AcY,AcZ,Tmp,GyX,GyY,GyZ, t_sensor;
+int16_t AcX,AcY,AcZ,Tmp,GyX,GyY,GyZ;  // MPU Data placeholders
+
+unsigned long start;
+unsigned long end;
+unsigned long delta;
 
 void setup(){
   Wire.begin();
@@ -63,25 +68,68 @@ void setup(){
 
 void loop(){
 
-  servoLeft.write(45);      // Turn SG90 servo Left to 45 degrees
+  start = micros();
+  // Call to your function
+  writetoservo(45);   //Turn SG90 servo Left to 45 degrees
+  // Compute the time it took
+  end = micros(); 
+  delta = end - start;
+  Serial.print(delta);
+  Serial.println("ms to send command to servo");
   delay(1000);          // Wait 1 second
-  servoLeft.write(90);      // Turn SG90 servo back to 90 degrees (center position)
-  delay(1000);          // Wait 1 second
-  servoLeft.write(135);     // Turn SG90 servo Right to 135 degrees
-  delay(1000);          // Wait 1 second
-  servoLeft.write(90);      // Turn SG90 servo back to 90 degrees (center position)
-  delay(1000);
-
-  servoRight.write(45);      // Turn SG90 servo Left to 45 degrees
-  delay(1000);          // Wait 1 second
-  servoRight.write(90);      // Turn SG90 servo back to 90 degrees (center position)
-  delay(1000);          // Wait 1 second
-  servoRight.write(135);     // Turn SG90 servo Right to 135 degrees
-  delay(1000);          // Wait 1 second
-  servoRight.write(90);      // Turn SG90 servo back to 90 degrees (center position)
-  delay(1000);
-
   
+
+  start = micros();
+  // Call to your function
+  setmodecounter();   //Set the correct display mode
+  // Compute the time it took
+  end = micros();
+  delta = end - start;
+  Serial.print(delta);
+  Serial.println("ms to set display mode with potential meter");
+  delay(1000);          // Wait 1 second
+  
+
+ start = micros();
+  // Call to your function
+  detectobjectwithcamera();   //Set the correct display mode
+  // Compute the time it took
+  end = micros();
+  delta = end - start;
+  Serial.print(delta);
+  Serial.println("ms to detect object with camera");
+  delay(1000);          // Wait 1 second
+
+ start = micros();
+  // Call to your function
+  readgyro();   //Read data from gyro
+  // Compute the time it took
+  end = micros();
+  delta = end - start;
+  Serial.print(delta);
+  Serial.println("ms to read data from gyro");
+  delay(1000);          // Wait 1 second
+
+  start = micros();
+  // Call to your function
+  setlcddata();   //Read data from gyro
+  // Compute the time it took
+  end = micros();
+  delta = end - start;
+  Serial.print(delta);
+  Serial.println("ms to set lcd data");
+  delay(1000);          // Wait 1 second
+
+}
+
+
+
+void writetoservo(int x){
+  servoLeft.write(x); 
+}
+
+
+void setmodecounter(){
   float voltage;
   int sensor_value = analogRead(ROTARY_ANGLE_SENSOR);
   voltage = (float)sensor_value*ADC_REF/1023;
@@ -102,8 +150,10 @@ void loop(){
   {
     modecounter = 3; 
   }
+}
 
-  
+void detectobjectwithcamera(){
+   
   static int i = 0;
   int j;
   uint16_t blocks;
@@ -117,8 +167,7 @@ void loop(){
   {
     i++;
     
-    // do this (print) every 50 frames because printing every
-    // frame would bog down the Arduino
+    
     if (i%10==0)
     {
       sprintf(buf, "Detected %d:\n", blocks);
@@ -142,8 +191,10 @@ void loop(){
       }
     }
  }
+}
 
- Wire.beginTransmission(MPU_addr);
+void readgyro(){
+  Wire.beginTransmission(MPU_addr);
   Wire.write(0x3B);  // starting with register 0x3B (ACCEL_XOUT_H)
   Wire.endTransmission(false);
   Wire.requestFrom(MPU_addr,14,true);  // request a total of 14 registers
@@ -154,7 +205,9 @@ void loop(){
   GyX=Wire.read()<<8|Wire.read();  // 0x43 (GYRO_XOUT_H) & 0x44 (GYRO_XOUT_L)
   GyY=Wire.read()<<8|Wire.read();  // 0x45 (GYRO_YOUT_H) & 0x46 (GYRO_YOUT_L)
   GyZ=Wire.read()<<8|Wire.read();  // 0x47 (GYRO_ZOUT_H) & 0x48 (GYRO_ZOUT_L)
+}
 
+void setlcddata(){
   if(modecounter == 0)
   {
     lcd.setRGB(0, 255, 0);
@@ -194,9 +247,7 @@ void loop(){
     lcd.print(GyZ);
     delay(500);
   }
-
 }
-
 
 
 
